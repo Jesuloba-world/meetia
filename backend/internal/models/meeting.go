@@ -6,6 +6,14 @@ import (
 	"github.com/uptrace/bun"
 )
 
+type ParticipantRole string
+
+const (
+	MeetingParticipantHost   ParticipantRole = "Host"
+	MeetingParticipantCoHost ParticipantRole = "Co-Host"
+	MeetingParticipantNormal ParticipantRole = "Participant"
+)
+
 type Meeting struct {
 	bun.BaseModel `bun:"table:meetings,alias:m"`
 
@@ -28,12 +36,12 @@ type Meeting struct {
 type MeetingParticipant struct {
 	bun.BaseModel `bun:"table:meeting_participants,alias:mp"`
 
-	ID        string    `bun:"id,pk,type:uuid,default:gen_random_uuid()" json:"id"`
-	MeetingID string    `bun:"meeting_id,notnull" json:"meetingId"`
-	UserID    string    `bun:"user_id,notnull" json:"userId"`
-	Role      string    `bun:"role,notnull" json:"role"` // host, co-host, participant
-	JoinedAt  time.Time `bun:"joined_at" json:"joinedAt,omitempty"`
-	LeftAt    time.Time `bun:"left_at" json:"leftAt,omitempty"`
+	ID        string          `bun:"id,pk,type:uuid,default:gen_random_uuid()" json:"id"`
+	MeetingID string          `bun:"meeting_id,notnull" json:"meetingId"`
+	UserID    string          `bun:"user_id,notnull" json:"userId"`
+	Role      ParticipantRole `bun:"role,notnull" json:"role"` // host, co-host, participant
+	JoinedAt  time.Time       `bun:"joined_at" json:"joinedAt,omitempty"`
+	LeftAt    time.Time       `bun:"left_at" json:"leftAt,omitempty"`
 
 	// Relations
 	Meeting *Meeting `bun:"rel:belongs-to,join:meeting_id=id" json:"meeting,omitempty"`
