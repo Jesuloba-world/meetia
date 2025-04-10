@@ -2,9 +2,22 @@ package api
 
 import (
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/go-chi/chi/v5"
+
+	"github.com/meetia/backend/internal/api/handler"
+	"github.com/meetia/backend/internal/services/auth"
+	"github.com/meetia/backend/internal/services/meeting"
+	"github.com/meetia/backend/internal/services/webrtc"
 )
 
-func SetupRoutes(r chi.Router, api huma.API) {
+func SetupRoutes(
+	api huma.API,
+	authService *auth.AuthService,
+	sfuService *webrtc.SFUService,
+	meetingService *meeting.MeetingService,
+) {
+	webrtcHandler := handler.NewWebRTCHandler(sfuService, authService.GetTokenAuth())
+	meetingHandler := handler.NewMeetinghandler(meetingService, authService.GetTokenAuth())
 
+	webrtcHandler.RegisterRoutes(api)
+	meetingHandler.RegisterRoutes(api)
 }

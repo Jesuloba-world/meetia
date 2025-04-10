@@ -2,18 +2,19 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"log"
-	"net/http"
 	"sync"
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
 	pion "github.com/pion/webrtc/v3"
 
+	"github.com/meetia/backend/internal/api/middleware"
 	"github.com/meetia/backend/internal/services/webrtc"
+	humagroup "github.com/meetia/backend/lib/humaGroup"
 )
 
 type WebRTCHandler struct {
@@ -28,31 +29,49 @@ func NewWebRTCHandler(sfuService *webrtc.SFUService, tokenAuth *jwtauth.JWTAuth)
 	}
 }
 
-func (h *WebRTCHandler) RegisterRoutes(r chi.Router, api huma.API) {
-	r.Route("/api/rtc", func(r chi.Router) {
-		r.Use(jwtauth.Verifier(h.tokenAuth))
-		r.Use(jwtauth.Authenticator(h.tokenAuth))
-		r.Get("/signal/{meetingID}", h.HandleWebSocket)
-	})
+func (h *WebRTCHandler) RegisterRoutes(api huma.API) {
+	rtcGroup := humagroup.NewHumaGroup(
+		api,
+		"/api/rtc",
+		[]string{"WebRTC"},
+		middleware.JWTMiddleware(h.tokenAuth),
+		middleware.WithHttpContext,
+	)
+
+	humagroup.Get(
+		rtcGroup,
+		"/signal/{meetingID}",
+		h.HandleWebSocket,
+		"wsSignal",
+		&humagroup.HumaGroupOptions{
+			Summary:     "WebRTC Signaling",
+			Description: "WebSocket endpoint for WebRTC signaling",
+		},
+	)
 }
 
-func (h *WebRTCHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	meetingID := chi.URLParam(r, "meetingID")
-	if meetingID == "" {
-		http.Error(w, "Meeting ID is required", http.StatusBadRequest)
-		return
-	}
+type handleWebSocketInput struct {
+	AuthParam
+
+	MeetingID string `path:"meetingID" required:"true" doc:"Meeting ID"`
+}
+
+func (h *WebRTCHandler) HandleWebSocket(ctx context.Context, input *handleWebSocketInput) (*struct{}, error) {
+	meetingID := input.MeetingID
 
 	// get user ID from jwt token
-	_, claims, err := jwtauth.FromContext(r.Context())
+	_, claims, err := jwtauth.FromContext(ctx)
 	if err != nil {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		return
+		return nil, huma.Error401Unauthorized("invalid token", err)
 	}
 	userID, ok := claims["user_id"].(string)
 	if !ok {
-		http.Error(w, "Invalid token claims", http.StatusUnauthorized)
-		return
+		return nil, huma.Error401Unauthorized("invalid token claims")
+	}
+
+	r, w, ok := middleware.GetHttpContext(ctx)
+	if !ok {
+		return nil, fmt.Errorf("http context not available")
 	}
 
 	// accept websocket connection
@@ -62,7 +81,7 @@ func (h *WebRTCHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) 
 	})
 	if err != nil {
 		log.Printf("Websocket accept error: %v", err)
-		return
+		return nil, fmt.Errorf("websocket accept error: %v", err)
 	}
 	defer c.Close(websocket.StatusInternalError, "Connection closed")
 
@@ -71,7 +90,7 @@ func (h *WebRTCHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		log.Printf("Failed to create peer connection: %v", err)
 		c.Close(websocket.StatusInternalError, "Failed to create peer connection")
-		return
+		return nil, fmt.Errorf("failed to create peer connection: %v", err)
 	}
 
 	// signal channel to coordinate websocket communication
@@ -159,4 +178,6 @@ func (h *WebRTCHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) 
 	// Wait for both goroutines to finish
 	wg.Wait()
 	c.Close(websocket.StatusNormalClosure, "Connection closed")
+
+	return &struct{}{}, nil
 }

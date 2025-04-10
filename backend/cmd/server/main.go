@@ -9,17 +9,24 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
+	"github.com/meetia/backend/internal/api"
 	"github.com/meetia/backend/internal/config"
 	"github.com/meetia/backend/internal/db"
+	"github.com/meetia/backend/internal/repository"
+	"github.com/meetia/backend/internal/services/auth"
+	"github.com/meetia/backend/internal/services/meeting"
+	"github.com/meetia/backend/internal/services/webrtc"
 )
 
 func main() {
 	cfg := config.Load()
-	_ = db.Initialize(cfg)
+	database := db.Initialize(cfg)
 	defer db.Close()
 
 	r := chi.NewRouter()
@@ -36,6 +43,20 @@ func main() {
 		MaxAge:           300,
 	}))
 	r.Use(middleware.Heartbeat("/health"))
+
+	humaConfig := huma.DefaultConfig("Meetia API", "1.0.0")
+	humaConfig.Info.Description = "API for Meetia video conferencing platform"
+	humaapi := humachi.New(r, humaConfig)
+
+	// Initialize repositories
+	userRepo := repository.NewUserRepository(database)
+	meetingRepo := repository.NewMeetingRepository(database)
+
+	authService := auth.NewAuthService(userRepo, cfg.JWTSecret, 24*time.Hour)
+	meetingService := meeting.NewMeetingService(meetingRepo, userRepo)
+	sfuService := webrtc.NewSFUService()
+
+	api.SetupRoutes(humaapi, authService, sfuService, meetingService)
 
 	// start server
 	server := &http.Server{
