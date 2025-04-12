@@ -60,13 +60,9 @@ func (h *WebRTCHandler) HandleWebSocket(ctx context.Context, input *handleWebSoc
 	meetingID := input.MeetingID
 
 	// get user ID from jwt token
-	_, claims, err := jwtauth.FromContext(ctx)
+	userID, err := getUserIdFromContext(ctx)
 	if err != nil {
-		return nil, huma.Error401Unauthorized("invalid token", err)
-	}
-	userID, ok := claims["user_id"].(string)
-	if !ok {
-		return nil, huma.Error401Unauthorized("invalid token claims")
+		return nil, err
 	}
 
 	r, w, ok := middleware.GetHttpContext(ctx)

@@ -17,7 +17,9 @@ func SetupRoutes(
 ) {
 	webrtcHandler := handler.NewWebRTCHandler(sfuService, authService.GetTokenAuth())
 	meetingHandler := handler.NewMeetinghandler(meetingService, authService.GetTokenAuth())
+	authHandler := handler.NewAuthHandler(authService)
 
+	authHandler.RegisterRoutes(api)
 	webrtcHandler.RegisterRoutes(api)
 	meetingHandler.RegisterRoutes(api)
 }
