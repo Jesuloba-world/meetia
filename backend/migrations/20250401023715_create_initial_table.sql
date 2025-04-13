@@ -16,7 +16,7 @@ CREATE TABLE meetings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title VARCHAR(255) NOT NULL,
     host_id UUID NOT NULL REFERENCES users(id),
-    meeting_code VARCHAR(20) UNIQUE NOT NULL,
+    meeting_code VARCHAR(20) UNIQUE NOT NULL, 
     password VARCHAR(255),
     is_private BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

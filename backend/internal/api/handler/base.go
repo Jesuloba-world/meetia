@@ -5,10 +5,11 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/jwtauth/v5"
+
 )
 
 type AuthParam struct {
-	Authorization string `required:"true" header:"Authorization" example:"BEARER <token>" doc:"BEARER <token>"`
+	Authorization string `required:"true" header:"Authorization" example:"Bearer <token>" doc:"Bearer <token>"`
 }
 
 func getUserIdFromContext(ctx context.Context) (string, error) {

@@ -43,6 +43,10 @@ func Initialize(cfg *config.Config) *bun.DB {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
+	// DB.AddQueryHook(bundebug.NewQueryHook(
+	// 	bundebug.WithVerbose(true),
+	// ))
+
 	slog.Info("Connected to database successfully")
 	return DB
 }

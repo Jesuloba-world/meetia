@@ -27,7 +27,7 @@ func (r *MeetingRepository) GetByID(ctx context.Context, id string) (*models.Mee
 	err := r.db.NewSelect().
 		Model(meeting).
 		Relation("Host").
-		Where("id = ?", id).
+		Where("m.id = ?", id).
 		Scan(ctx)
 
 	if err != nil {
@@ -55,7 +55,7 @@ func (r *MeetingRepository) GetActiveForUser(ctx context.Context, userID string)
 	err := r.db.NewSelect().
 		Model(&meetings).
 		Relation("Host").
-		Where("host_id = ? OR id IN (SELECT meeting_id FROM meeting_participants WHERE user_id = ?)", userID, userID).
+		Where("host_id = ? OR m.id IN (SELECT meeting_id FROM meeting_participants WHERE user_id = ?)", userID, userID).
 		Where("ended_at IS NULL").
 		Order("created_at DESC").
 		Scan(ctx)
