@@ -14,5 +14,25 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  coturn:
+    image: coturn/coturn
+    container_name: meetia_turn
+    restart: always
+    ports:
+      - "3478:3478"
+      - "3478:3478/tcp"
+      - "5349:5349"
+      - "5349:5349/tcp"
+      - "49160-49200:49160-49200" 
+    environment:
+      TURN_USERNAME: "meetia_user"
+      TURN_PASSWORD: "strong_password"
+      TURN_REALM: "meetia"
+      LISTENING_PORT: 3478
+      TLS_LISTENING_PORT: 5349
+      MIN_PORT: 49160 
+      MAX_PORT: 49200 
+    command: -v -n --no-cli
+
 volumes:
   postgres_data:

@@ -3,9 +3,6 @@ package middleware
 import (
 	"context"
 	"net/http"
-
-	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 )
 
 type httpReqRespKey struct{}
@@ -15,15 +12,15 @@ type HttpReqResp struct {
 	R *http.Request
 }
 
-func WithHttpContext(ctx huma.Context, next func(huma.Context)) {
-	r, w := humachi.Unwrap(ctx)
+func WithHttpContextChi(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), httpReqRespKey{}, &HttpReqResp{
+			W: w,
+			R: r,
+		})
 
-	newCtx := huma.WithValue(ctx, httpReqRespKey{}, &HttpReqResp{
-		W: w,
-		R: r,
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
-
-	next(newCtx)
 }
 
 func GetHttpContext(ctx context.Context) (*http.Request, http.ResponseWriter, bool) {

@@ -37,7 +37,7 @@ export default function NewMeeting() {
 			return response.json();
 		},
 		onSuccess: (data) => {
-			router.push(`/meeting/${data.id}`);
+			router.push(`/meeting/${data.meeting.id}`);
 		},
 	});
 

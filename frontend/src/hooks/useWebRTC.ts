@@ -35,6 +35,7 @@ export function useWebRTC(meetingId: string) {
 	const [isScreenSharing, setIsScreenSharing] = useState(false);
 
 	const peerConnection = useRef<ExtendedRTCPeerConnection | null>(null);
+	const pendingSignalMessages = useRef<SignalMessage[]>([]);
 
 	const serverUrl =
 		process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -58,52 +59,145 @@ export function useWebRTC(meetingId: string) {
 				setError(new Error("WebSocket connection error"));
 				setIsLoading(false);
 			},
-			onClose: () => {
-				console.log("WebSocket connection closed");
+			onClose: (event) => {
+				console.log("WebSocket connection closed", {
+					code: event.code,
+					reason: event.reason,
+					wasClean: event.wasClean,
+				});
+				// If connection was closed abnormally, try to reconnect
+				if (!event.wasClean) {
+					console.log(
+						"Connection closed abnormally, will attempt to reconnect"
+					);
+				}
 			},
 		}
 	);
 
-	const isConnected = readyState === ReadyState.OPEN;
+	const isConnected =
+		readyState === ReadyState.OPEN && !!peerConnection.current;
 
 	// send signal message through websocket
 	const sendSignalMessage = useCallback(
 		(message: SignalMessage) => {
+			console.log(
+				`Attempting to send ${message.type}, WebSocket state: ${readyState}`
+			);
 			if (readyState === ReadyState.OPEN) {
+				console.log(`Actually sending: ${message.type}`);
+
 				sendMessage(JSON.stringify(message));
+			} else {
+				console.warn(
+					`WebSocket not open (state: ${readyState}) when trying to send ${message.type}. Message not sent.`
+				);
+				pendingSignalMessages.current.push(message); // queue message for later send
 			}
 		},
 		[sendMessage, readyState]
 	);
 
+	const resendPendingSignals = useCallback(() => {
+		if (pendingSignalMessages.current.length > 0) {
+			if (readyState !== ReadyState.OPEN) {
+				console.warn(
+					`WebSocket not ready (state: ${readyState}), skipping resend`
+				);
+				return;
+			}
+
+			console.log(
+				`Attempting to resend ${pendingSignalMessages.current.length} pending signals`
+			);
+			pendingSignalMessages.current.forEach((message) => {
+				sendSignalMessage(message);
+			});
+			pendingSignalMessages.current = [];
+		}
+	}, [sendSignalMessage, readyState]);
+
+	useEffect(() => {
+		const interval = setInterval(() => {
+			resendPendingSignals();
+		}, 500);
+
+		return () => clearInterval(interval);
+	}, [resendPendingSignals]);
+
 	const initializePeerConnection = useCallback(() => {
-		if (!user) return;
+		if (!user) {
+			console.log("Cannot initialize peer connection: No user");
+			return;
+		}
+
+		pendingSignalMessages.current = [];
 
 		const config: RTCConfiguration = {
 			iceServers: [
+				// {
+				// 	urls: "turn:localhost:3478",
+				// 	username: "meetia_user",
+				// 	credential: "strong_password"
+				// },
 				{ urls: "stun:stun.l.google.com:19302" },
-				{ urls: "stun:stun1.l.google.com:19302" },
+				{ urls: "stun:stun.l.google.com:5349" },
+				{ urls: "stun:stun1.l.google.com:3478" },
+				{ urls: "stun:stun1.l.google.com:5349" },
 				{ urls: "stun:stun2.l.google.com:19302" },
-				{ urls: "stun:stun3.l.google.com:19302" },
+				{ urls: "stun:stun2.l.google.com:5349" },
+				{ urls: "stun:stun3.l.google.com:3478" },
+				{ urls: "stun:stun3.l.google.com:5349" },
 				{ urls: "stun:stun4.l.google.com:19302" },
-				{ urls: "stun:stun.services.mozilla.com:3478" },
+				{ urls: "stun:stun4.l.google.com:5349" },
 			],
+			iceTransportPolicy: "all",
 		};
 
 		// create new peer connection
 		const pc = new RTCPeerConnection(config);
 		peerConnection.current = pc;
 
+		pc.onconnectionstatechange = () => {
+			console.log("Peer connection state changed:", pc.connectionState);
+			if (
+				pc.connectionState === "failed" ||
+				pc.connectionState === "disconnected" ||
+				pc.connectionState === "closed"
+			) {
+				console.error("Peer connection failed or disconnected");
+			}
+		};
+
 		// Handle ICE candidate events
 		pc.onicecandidate = (event) => {
 			if (event.candidate) {
-				sendSignalMessage({
-					type: "candidate",
-					candidate: event.candidate.toJSON(),
-					userId: user.id,
-					meetingId,
-				});
+				if (
+					["stable", "have-local-offer"].includes(pc.signalingState)
+				) {
+					console.log("Generated ICE candidate:", {
+						type: event.candidate.type,
+						protocol: event.candidate.protocol,
+						address: event.candidate.address,
+						port: event.candidate.port,
+					});
+					sendSignalMessage({
+						type: "candidate",
+						candidate: event.candidate.toJSON(),
+						userId: user.id,
+						meetingId,
+					});
+				} else {
+					console.warn(
+						"Dropping ICE candidate - invalid signaling state:",
+						pc.signalingState
+					);
+				}
 			}
+		};
+
+		pc.oniceconnectionstatechange = () => {
+			console.log("ICE connection state:", pc.iceConnectionState);
 		};
 
 		// Handle track events
@@ -164,20 +258,57 @@ export function useWebRTC(meetingId: string) {
 		[meetingId, sendSignalMessage, user]
 	);
 
-	const handleAnswer = useCallback(async (message: SignalMessage) => {
-		if (!peerConnection.current || !message.sdp) return;
+	const handleAnswer = useCallback(
+		async (message: SignalMessage) => {
+			if (!peerConnection.current || !message.sdp) return;
 
-		try {
-			await peerConnection.current.setRemoteDescription(
-				new RTCSessionDescription({
-					type: "answer",
-					sdp: message.sdp,
-				})
-			);
-		} catch (err) {
-			console.error("Error handling answer:", err);
-		}
-	}, []);
+			try {
+				if (
+					peerConnection.current.signalingState === "have-local-offer"
+				) {
+					await peerConnection.current.setRemoteDescription(
+						new RTCSessionDescription({
+							type: "answer",
+							sdp: message.sdp,
+						})
+					);
+					console.log(
+						"Answer processed, new signaling state:",
+						peerConnection.current.signalingState
+					);
+				} else {
+					console.warn(
+						"Received answer in unexpected state:",
+						peerConnection.current.signalingState
+					);
+
+					// If connection is still active, ignore stale answer
+					if (
+						["connected", "connecting"].includes(
+							peerConnection.current.connectionState
+						)
+					) {
+						console.log(
+							"Ignoring answer as connection is already established"
+						);
+						return;
+					}
+
+					console.log(
+						"Restarting peer connection due to unexpected answer state"
+					);
+					initializePeerConnection();
+				}
+			} catch (err) {
+				console.error("Error handling answer:", err);
+
+				if (err instanceof Error) {
+					initializePeerConnection();
+				}
+			}
+		},
+		[initializePeerConnection]
+	);
 
 	const handleCandidate = useCallback(async (message: SignalMessage) => {
 		if (!peerConnection.current || !message.candidate) return;
@@ -216,9 +347,15 @@ export function useWebRTC(meetingId: string) {
 		if (lastMessage && peerConnection.current) {
 			try {
 				const message = JSON.parse(lastMessage.data) as SignalMessage;
+				console.log("Received WebSocket message:", message.type);
 				handleSignalMessage(message);
+				console.log(
+					"Post-handler signaling state:",
+					peerConnection.current.signalingState
+				);
 			} catch (err) {
 				console.error("Error parsing WebSocket message:", err);
+				console.error("Raw message data:", lastMessage.data);
 			}
 		}
 	}, [lastMessage, handleSignalMessage]);
@@ -370,19 +507,29 @@ export function useWebRTC(meetingId: string) {
 
 		// close peer connection
 		if (peerConnection.current) {
+			console.log("Closing peer connection in disconnect()");
 			peerConnection.current.close();
 			peerConnection.current = null;
 		}
 
+		pendingSignalMessages.current = [];
 		setTracks([]);
 	}, [localStream, screenStream]);
+
+	useEffect(() => {
+		console.log("useWebRTC hook mounted for meeting:", meetingId);
+		return () => {
+			console.log("useWebRTC hook unmounting for meeting:", meetingId);
+		};
+	}, [meetingId]);
 
 	// cleanup on onmount
 	useEffect(() => {
 		return () => {
 			disconnect();
 		};
-	}, [disconnect]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 
 	return {
 		isConnected,

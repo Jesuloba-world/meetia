@@ -29,7 +29,7 @@ func NewMeetinghandler(meetingService *meeting.MeetingService, tokenAuth *jwtaut
 func (h *MeetingHandler) RegisterRoutes(api huma.API) {
 	meetingGroup := humagroup.NewHumaGroup(api, "/api/meetings", []string{"Meetings"}, middleware.JWTMiddleware(h.tokenAuth))
 
-	humagroup.Post(meetingGroup, "/", h.CreateMeeting, "CreateMeeting", &humagroup.HumaGroupOptions{
+	humagroup.Post(meetingGroup, "", h.CreateMeeting, "CreateMeeting", &humagroup.HumaGroupOptions{
 		Summary:     "Create a new meeting",
 		Description: "Creates a new meeting with the current user as host",
 	})
@@ -37,7 +37,7 @@ func (h *MeetingHandler) RegisterRoutes(api huma.API) {
 		Summary:     "Join an existing meeting",
 		Description: "Join a meeting using its meeting code and password (if required)",
 	})
-	humagroup.Get(meetingGroup, "/", h.ListMeetings, "ListMeetings", &humagroup.HumaGroupOptions{
+	humagroup.Get(meetingGroup, "", h.ListMeetings, "ListMeetings", &humagroup.HumaGroupOptions{
 		Summary:     "List user's meetings",
 		Description: "Get a list of active meetings where the user is a host or participant",
 	})

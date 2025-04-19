@@ -22,13 +22,27 @@ func NewSFUService() *SFUService {
 		rooms: make(map[string]*Room),
 		config: webrtc.Configuration{
 			ICEServers: []webrtc.ICEServer{
-				{URLs: []string{"stun:stun.l.google.com:19302"}},
-				{URLs: []string{"stun:stun1.l.google.com:19302"}},
-				{URLs: []string{"stun:stun2.l.google.com:19302"}},
-				{URLs: []string{"stun:stun3.l.google.com:19302"}},
-				{URLs: []string{"stun:stun4.l.google.com:19302"}},
-				{URLs: []string{"stun:stun.services.mozilla.com:3478"}},
+				{
+					URLs: []string{
+						"stun:stun.l.google.com:19302",
+						"stun:stun.l.google.com:5349",
+						"stun:stun1.l.google.com:3478",
+						"stun:stun1.l.google.com:5349",
+						"stun:stun2.l.google.com:19302",
+						"stun:stun2.l.google.com:5349",
+						"stun:stun3.l.google.com:3478",
+						"stun:stun3.l.google.com:5349",
+						"stun:stun4.l.google.com:19302",
+						"stun:stun4.l.google.com:5349",
+					},
+				},
+				// {
+				// 	URLs:       []string{"turn:localhost:3478"},
+				// 	Username:   "meetia_user",
+				// 	Credential: "strong_password",
+				// },
 			},
+			ICETransportPolicy: webrtc.ICETransportPolicyAll,
 		},
 	}
 }
@@ -203,6 +217,10 @@ func (s *SFUService) CreatePeerConnection(roomID string, peerID string) (*Peer, 
 }
 
 func (s *SFUService) HandleOffer(peer *Peer, offer webrtc.SessionDescription) (webrtc.SessionDescription, error) {
+	if peer.Connection.SignalingState() == webrtc.SignalingStateHaveRemoteOffer {
+		peer.Connection.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer})
+	}
+
 	err := peer.Connection.SetRemoteDescription(offer)
 	if err != nil {
 		return webrtc.SessionDescription{}, err
@@ -224,9 +242,24 @@ func (s *SFUService) HandleOffer(peer *Peer, offer webrtc.SessionDescription) (w
 }
 
 func (s *SFUService) HandleAnswer(peer *Peer, answer webrtc.SessionDescription) error {
-	return peer.Connection.SetRemoteDescription(answer)
+	if peer.Connection.SignalingState() == webrtc.SignalingStateHaveLocalOffer {
+		return peer.Connection.SetRemoteDescription(answer)
+	}
+
+	log.Printf("Received answer in unexpected state: %s", peer.Connection.SignalingState().String())
+	return nil
 }
 
 func (s *SFUService) HandleCandidate(peer *Peer, candidate webrtc.ICECandidateInit) error {
+	// Validate candidate format
+	if candidate.Candidate == "" {
+		return errors.New("empty ICE candidate")
+	}
+
+	// Check connection state
+	if peer.Connection.ICEConnectionState() == webrtc.ICEConnectionStateClosed {
+		return errors.New("connection closed")
+	}
+
 	return peer.Connection.AddICECandidate(candidate)
 }

@@ -35,7 +35,6 @@ func (h *WebRTCHandler) RegisterRoutes(api huma.API) {
 		"/api/rtc",
 		[]string{"WebRTC"},
 		middleware.JWTMiddleware(h.tokenAuth),
-		middleware.WithHttpContext,
 	)
 
 	humagroup.Get(
@@ -51,9 +50,8 @@ func (h *WebRTCHandler) RegisterRoutes(api huma.API) {
 }
 
 type handleWebSocketInput struct {
-	AuthParam
-
 	MeetingID string `path:"meetingID" required:"true" doc:"Meeting ID"`
+	Token     string `query:"token" required:"true" doc:"Auth token"`
 }
 
 func (h *WebRTCHandler) HandleWebSocket(ctx context.Context, input *handleWebSocketInput) (*struct{}, error) {
@@ -136,6 +134,12 @@ func (h *WebRTCHandler) HandleWebSocket(ctx context.Context, input *handleWebSoc
 				}
 
 			case "answer":
+				if peer.Connection.SignalingState() != pion.SignalingStateHaveLocalOffer {
+					log.Printf("Received unexpected answer in state: %s",
+						peer.Connection.SignalingState().String())
+					continue
+				}
+
 				sdp := pion.SessionDescription{
 					Type: pion.SDPTypeAnswer,
 					SDP:  msg.SDP,
