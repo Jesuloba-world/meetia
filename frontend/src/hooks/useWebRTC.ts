@@ -135,11 +135,6 @@ export function useWebRTC(meetingId: string) {
 
 		const config: RTCConfiguration = {
 			iceServers: [
-				// {
-				// 	urls: "turn:localhost:3478",
-				// 	username: "meetia_user",
-				// 	credential: "strong_password"
-				// },
 				{ urls: "stun:stun.l.google.com:19302" },
 				{ urls: "stun:stun.l.google.com:5349" },
 				{ urls: "stun:stun1.l.google.com:3478" },
@@ -175,12 +170,6 @@ export function useWebRTC(meetingId: string) {
 				if (
 					["stable", "have-local-offer"].includes(pc.signalingState)
 				) {
-					console.log("Generated ICE candidate:", {
-						type: event.candidate.type,
-						protocol: event.candidate.protocol,
-						address: event.candidate.address,
-						port: event.candidate.port,
-					});
 					sendSignalMessage({
 						type: "candidate",
 						candidate: event.candidate.toJSON(),
@@ -202,30 +191,48 @@ export function useWebRTC(meetingId: string) {
 
 		// Handle track events
 		pc.ontrack = (event) => {
-			const stream = event.streams[0];
-			const trackId = event.track.id;
-			const userId = stream.id.split("-")[0];
+			console.log("Track event received:", event);
+			if (!event.streams || event.streams.length === 0) {
+				console.warn("Received track without stream", event.track);
+				return;
+			}
 
-			const kind =
-				event.track.kind === "audio"
-					? "audio"
-					: stream.id.includes("screen")
-					? "screen"
-					: "video";
+			try {
+				const stream = event.streams[0];
+				const trackId = event.track.id;
+				const userId = stream.id.split("-")[0];
 
-			const newTrack: Track = {
-				stream,
-				userId,
-				kind,
-				trackId,
-			};
+				console.log(`New ${event.track.kind} track from ${userId}`, {
+					stream,
+					track: event.track,
+					streams: event.streams,
+				});
 
-			setTracks((prev) => [
-				...prev.filter((t) => t.trackId !== trackId),
-				newTrack,
-			]);
+				// Existing kind determination logic
+				const kind =
+					event.track.kind === "audio"
+						? "audio"
+						: stream.id.includes("screen")
+						? "screen"
+						: "video";
 
-			setIsLoading(false);
+				// Rest of existing track handling...
+				const newTrack: Track = {
+					stream,
+					userId,
+					kind,
+					trackId,
+				};
+
+				setTracks((prev) => [
+					...prev.filter((t) => t.trackId !== trackId),
+					newTrack,
+				]);
+			} catch (error) {
+				console.error("Error handling track event:", error);
+			} finally {
+				setIsLoading(false);
+			}
 		};
 	}, [user, meetingId, sendSignalMessage]);
 
@@ -370,6 +377,7 @@ export function useWebRTC(meetingId: string) {
 					video,
 					audio,
 				});
+				const isFirstPeer = tracks.length === 0;
 				setLocalStream(stream);
 				setIsMuted(!audio);
 				setIsVideoEnabled(video);
@@ -400,6 +408,10 @@ export function useWebRTC(meetingId: string) {
 					userId: user.id,
 					meetingId,
 				});
+
+				if (isFirstPeer) {
+					setIsLoading(false);
+				}
 
 				return stream;
 			} catch (err) {

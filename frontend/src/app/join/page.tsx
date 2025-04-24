@@ -41,7 +41,9 @@ export default function JoinMeeting() {
 				}
 			}
 
-			return response.json();
+			return response.json().then((data) => {
+				return data.meeting;
+			});
 		},
 		onSuccess: (data) => {
 			router.push(`/meeting/${data.id}`);

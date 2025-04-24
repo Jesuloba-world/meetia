@@ -108,16 +108,50 @@ func (s *SFUService) CreatePeerConnection(roomID string, peerID string) (*Peer, 
 	// setup ICE connection state handler
 	peerConnection.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
 		log.Printf("Peer %s ICE connection state: %s\n", peerID, state.String())
-		if state == webrtc.ICEConnectionStateDisconnected ||
-			state == webrtc.ICEConnectionStateFailed ||
+
+		if state == webrtc.ICEConnectionStateDisconnected {
+			// Start grace period for reconnection
+			time.AfterFunc(10*time.Second, func() {
+				if peer.Connection.ICEConnectionState() == webrtc.ICEConnectionStateDisconnected {
+					log.Printf("Peer %s permanent disconnect, cleaning up\n", peerID)
+					s.roomsMutex.Lock()
+					delete(room.Peers, peerID)
+					s.roomsMutex.Unlock()
+					peerConnection.Close()
+				}
+			})
+			return
+		}
+
+		if state == webrtc.ICEConnectionStateFailed ||
 			state == webrtc.ICEConnectionStateClosed {
 			s.roomsMutex.Lock()
 			delete(room.Peers, peerID)
 			s.roomsMutex.Unlock()
-
 			peerConnection.Close()
 		}
 	})
+
+	// peerConnection.OnNegotiationNeeded(func() {
+	// 	log.Printf("Peer %s negotiation needed", peerID)
+	// 	offer, err := peerConnection.CreateOffer(nil)
+	// 	if err != nil {
+	// 		log.Printf("Failed to create renegotiation offer: %v", err)
+	// 		return
+	// 	}
+
+	// 	if err := peerConnection.SetLocalDescription(offer); err != nil {
+	// 		log.Printf("Failed to set local description: %v", err)
+	// 		return
+	// 	}
+
+	// 	peer.SignalChannel <- &SignalMessage{
+	// 		Type:      "offer",
+	// 		SDP:       offer.SDP,
+	// 		UserID:    peerID,
+	// 		MeetingID: roomID,
+	// 	}
+	// })
 
 	// handle incoming tracks
 	peerConnection.OnTrack(func(remoteTrack *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {

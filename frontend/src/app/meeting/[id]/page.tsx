@@ -1,4 +1,3 @@
-// frontend/src/app/meeting/[id]/page.tsx (updated)
 "use client";
 
 import { useEffect, useState } from "react";
@@ -64,7 +63,7 @@ export default function MeetingRoom() {
 				throw new Error("Failed to fetch meeting details");
 			}
 
-			return response.json();
+			return response.json().then((data) => data.meeting);
 		},
 		enabled: !!token,
 	});
@@ -86,11 +85,15 @@ export default function MeetingRoom() {
 				throw new Error("Failed to fetch participants");
 			}
 
-			return response.json();
+			return response.json().then((data) => {
+				return data.participants;
+			});
 		},
 		enabled: !!token,
 		refetchInterval: 10000, // Poll for new participants every 10 seconds
 	});
+
+	console.log(participants);
 
 	const {
 		isConnected,

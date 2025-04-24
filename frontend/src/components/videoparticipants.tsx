@@ -40,7 +40,9 @@ export default function VideoParticipant({
 					autoPlay
 					playsInline
 					muted={isLocal || isMuted}
-					className="w-full h-full object-cover"
+					className={`w-full h-full object-cover ${
+						isLocal ? "scale-x-[-1]" : ""
+					}`}
 				/>
 			) : (
 				<div className="h-full flex items-center justify-center bg-gray-900 min-h-[200px]">
