@@ -200,7 +200,7 @@ export function useWebRTC(meetingId: string) {
 			try {
 				const stream = event.streams[0];
 				const trackId = event.track.id;
-				const userId = stream.id.split("-")[0];
+				const userId = stream.id;
 
 				console.log(`New ${event.track.kind} track from ${userId}`, {
 					stream,

@@ -132,27 +132,6 @@ func (s *SFUService) CreatePeerConnection(roomID string, peerID string) (*Peer, 
 		}
 	})
 
-	// peerConnection.OnNegotiationNeeded(func() {
-	// 	log.Printf("Peer %s negotiation needed", peerID)
-	// 	offer, err := peerConnection.CreateOffer(nil)
-	// 	if err != nil {
-	// 		log.Printf("Failed to create renegotiation offer: %v", err)
-	// 		return
-	// 	}
-
-	// 	if err := peerConnection.SetLocalDescription(offer); err != nil {
-	// 		log.Printf("Failed to set local description: %v", err)
-	// 		return
-	// 	}
-
-	// 	peer.SignalChannel <- &SignalMessage{
-	// 		Type:      "offer",
-	// 		SDP:       offer.SDP,
-	// 		UserID:    peerID,
-	// 		MeetingID: roomID,
-	// 	}
-	// })
-
 	// handle incoming tracks
 	peerConnection.OnTrack(func(remoteTrack *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		log.Printf("Peer %s added track: %s\n", peerID, remoteTrack.ID())
@@ -175,7 +154,7 @@ func (s *SFUService) CreatePeerConnection(roomID string, peerID string) (*Peer, 
 			}
 
 			// add track to other peers
-			if _, err := otherPeer.Connection.AddTrack(trackLocal); err != nil {
+			if _, err = otherPeer.Connection.AddTrack(trackLocal); err != nil {
 				log.Printf("Failed to add track to peer %s: %v\n", otherPeerID, err)
 				continue
 			}
@@ -246,6 +225,37 @@ func (s *SFUService) CreatePeerConnection(roomID string, peerID string) (*Peer, 
 			}
 		}()
 	})
+
+	if len(room.Tracks) > 0 {
+		log.Printf("Adding %d existing tracks to new peer %s\n", len(room.Tracks), peerID)
+
+		for trackID, otherTrack := range room.Tracks {
+			if otherTrack.StreamID() == peerID {
+				continue
+			}
+			if _, err := peer.Connection.AddTrack(otherTrack); err != nil {
+				log.Printf("Failed to add existing track %s to new peer %s: %v\n", trackID, peerID, err)
+				continue
+			}
+		}
+
+		offer, err := peer.Connection.CreateOffer(nil)
+		if err != nil {
+			log.Printf("Failed to create offer for new peer %s: %v\n", peerID, err)
+			return nil, err
+		} else {
+			if err := peer.Connection.SetLocalDescription(offer); err != nil {
+				log.Printf("Failed to set local description for new peer: %v\n", err)
+			} else {
+				peer.SignalChannel <- &SignalMessage{
+					Type:      "offer",
+					SDP:       offer.SDP,
+					UserID:    "server",
+					MeetingID: roomID,
+				}
+			}
+		}
+	}
 
 	return peer, nil
 }

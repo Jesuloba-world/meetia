@@ -46,6 +46,8 @@ export default function MeetingRoom() {
 	const { user, token, isAuthenticated, _hasHydrated } = useAuthStore();
 	const [showChat, setShowChat] = useState(false);
 
+	console.log("user id", user?.id);
+
 	// Fetch meeting details
 	const { data: meeting } = useQuery<Meeting>({
 		queryKey: ["meeting", meetingId],
@@ -136,7 +138,11 @@ export default function MeetingRoom() {
 	const getDisplayName = (userId: string) => {
 		if (userId === user?.id) return user.displayName;
 
+		console.log(participants);
+
 		const participant = participants?.find((p) => p.userId === userId);
+
+		console.log("participant", participant, "user Id", userId);
 		return participant?.user.displayName || "Unknown User";
 	};
 
