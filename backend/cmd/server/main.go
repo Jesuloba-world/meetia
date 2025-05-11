@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -25,6 +26,15 @@ import (
 )
 
 func main() {
+	slog.SetDefault(
+		slog.New(
+			slog.NewJSONHandler(
+				os.Stdout,
+				&slog.HandlerOptions{
+					Level: slog.LevelInfo, // You can set a minimum log level here if needed
+				},
+			)))
+
 	cfg := config.Load()
 	database := db.Initialize(cfg)
 	defer db.Close()
