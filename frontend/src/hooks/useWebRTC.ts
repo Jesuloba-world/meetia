@@ -420,7 +420,7 @@ export function useWebRTC(meetingId: string) {
 				return null;
 			}
 		},
-		[user, sendSignalMessage, meetingId]
+		[user, sendSignalMessage, meetingId, tracks.length]
 	);
 
 	// toggle audio mute state
