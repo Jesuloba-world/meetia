@@ -31,7 +31,7 @@ func main() {
 			slog.NewJSONHandler(
 				os.Stdout,
 				&slog.HandlerOptions{
-					Level: slog.LevelInfo, // You can set a minimum log level here if needed
+					Level: slog.LevelInfo,
 				},
 			)))
 
